@@ -1,0 +1,44 @@
+name: iOS build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    name: Build FreeHabits with Xcode
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Show Xcode and project schemes
+        run: |
+          xcodebuild -version
+          xcodebuild -list -project FreeHabits.xcodeproj
+
+      - name: Archive for iOS (unsigned)
+        run: |
+          xcodebuild archive \
+            -project FreeHabits.xcodeproj \
+            -scheme FreeHabits \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/FreeHabits.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload unsigned Xcode archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: FreeHabits-unsigned-xcarchive
+          path: ${{ runner.temp }}/FreeHabits.xcarchive
+          if-no-files-found: error
+          retention-days: 7
