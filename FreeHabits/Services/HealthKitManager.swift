@@ -8,7 +8,7 @@ import SwiftData
 import Foundation
 
 /// Reads Apple Health data to auto-mark linked habits as complete.
-/// All access is read-only — no data is ever written to HealthKit.
+/// All access is read-only â€” no data is ever written to HealthKit.
 @MainActor
 final class HealthKitManager {
 
@@ -16,7 +16,13 @@ final class HealthKitManager {
     private let store = HKHealthStore()
 
     /// Whether HealthKit is available on this device (false on iPad without health data).
-    static var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
+    static var isAvailable: Bool {
+#if FREE_PERSONAL_INSTALL
+        false
+#else
+        HKHealthStore.isHealthDataAvailable()
+#endif
+    }
 
     // MARK: - Link options
 
@@ -39,7 +45,7 @@ final class HealthKitManager {
         .init(id: "mindfulSession",    title: "Meditation",        sfSymbol: "brain.head.profile"),
     ]
 
-    // MARK: - Mapping identifiers → HK types
+    // MARK: - Mapping identifiers â†’ HK types
 
     private static let workoutTypeMap: [String: HKWorkoutActivityType] = [
         "workout.running":  .running,
@@ -55,7 +61,7 @@ final class HealthKitManager {
     // MARK: - Authorization
 
     /// Requests read-only access for workout and mindfulness data.
-    /// Safe to call multiple times — HealthKit silently skips already-decided types.
+    /// Safe to call multiple times â€” HealthKit silently skips already-decided types.
     func requestAuthorization() async {
         guard Self.isAvailable else { return }
         var readTypes: Set<HKObjectType> = [.workoutType()]
@@ -120,3 +126,4 @@ final class HealthKitManager {
         try? context.save()
     }
 }
+
