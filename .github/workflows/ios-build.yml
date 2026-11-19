@@ -44,6 +44,9 @@ jobs:
           test -d "$APP_PATH"
           mkdir -p "$RUNNER_TEMP/freehabits-ipa/Payload"
           ditto "$APP_PATH" "$RUNNER_TEMP/freehabits-ipa/Payload/FreeHabits.app"
+          # AltStore Classic does not fully provision/sign embedded Watch apps.
+          # Package only the iPhone app for this personal sideload build.
+          rm -rf "$RUNNER_TEMP/freehabits-ipa/Payload/FreeHabits.app/Watch"
           (cd "$RUNNER_TEMP/freehabits-ipa" && zip -qry "$RUNNER_TEMP/FreeHabits-personal-unsigned.ipa" Payload)
 
       - name: Upload unsigned IPA
@@ -53,4 +56,3 @@ jobs:
           path: ${{ runner.temp }}/FreeHabits-personal-unsigned.ipa
           if-no-files-found: error
           retention-days: 7
-

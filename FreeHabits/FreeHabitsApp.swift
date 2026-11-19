@@ -28,7 +28,7 @@ struct FreeHabitsApp: App {
     var body: some Scene {
         WindowGroup {
             if hasCompletedOnboarding {
-                ContentView()
+                FreeHabitsRootView()
             } else {
                 OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
             }
@@ -36,4 +36,3 @@ struct FreeHabitsApp: App {
         .modelContainer(sharedModelContainer)
     }
 }
-

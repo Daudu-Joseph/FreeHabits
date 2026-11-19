@@ -22,16 +22,23 @@ struct ContentView: View {
 
     private let calendar = Calendar.current
     private var today: Date { calendar.startOfDay(for: .now) }
+    private var dateBounds: ClosedRange<Date> {
+        (calendar.date(byAdding: .year, value: -50, to: today) ?? today)...today
+    }
     private var isToday: Bool { selectedDate == today }
 
     private var activeHabits: [Habit] { habits.filter { !$0.isArchived } }
     private var archivedHabits: [Habit] { habits.filter(\.isArchived) }
 
     private var completedOnDate: Int {
-        activeHabits.filter { $0.isCompleted(on: selectedDate) }.count
+        activeHabits.filter { isScheduled($0) && $0.isCompleted(on: selectedDate) }.count
     }
     private var dueOnDate: Int {
-        activeHabits.filter { $0.frequency.isDue(on: selectedDate) }.count
+        activeHabits.filter { isScheduled($0) }.count
+    }
+
+    private func isScheduled(_ habit: Habit) -> Bool {
+        calendar.startOfDay(for: habit.createdAt) <= selectedDate && habit.frequency.isDue(on: selectedDate) && !habit.isPaused(on: selectedDate)
     }
 
     private var navigationTitle: String {
@@ -62,31 +69,6 @@ struct ContentView: View {
                 ArchivedHabitsView(habits: archivedHabits)
             }
         }
-        // Horizontal swipe to navigate days.
-        // simultaneousGesture so list scroll and row swipe actions still work.
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 40)
-                .onEnded { value in
-                    let h = value.translation.width
-                    let v = value.translation.height
-                    // Only act on clearly horizontal swipes
-                    guard abs(h) > abs(v) * 1.5, abs(h) > 40 else { return }
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        if h < 0 {
-                            // Swipe left → go forward (toward today)
-                            guard selectedDate < today,
-                                  let next = calendar.date(byAdding: .day, value: 1, to: selectedDate)
-                            else { return }
-                            selectedDate = min(next, today)
-                        } else {
-                            // Swipe right → go back (older)
-                            guard let prev = calendar.date(byAdding: .day, value: -1, to: selectedDate)
-                            else { return }
-                            selectedDate = prev
-                        }
-                    }
-                }
-        )
         .onChange(of: activeHabits.count) {
             let pending = activeHabits.filter { !$0.isCompletedToday && $0.isDueToday }.count
             NotificationManager.shared.scheduleEveningNudge(pendingCount: pending)
@@ -198,6 +180,20 @@ struct ContentView: View {
     private var habitGrid: some View {
         ScrollView {
             VStack(spacing: 16) {
+                DateStrip(
+                    selection: $selectedDate,
+                    in: dateBounds,
+                    style: DateStripStyle(
+                        accent: .purple,
+                        onAccent: .white,
+                        label: .primary,
+                        secondary: .secondary,
+                        disabled: Color.secondary.opacity(0.35),
+                        dayHeight: 64,
+                        spacing: 5
+                    )
+                )
+                .padding(.horizontal)
                 ProgressHeaderView(
                     completed: completedOnDate,
                     total: dueOnDate,
@@ -242,6 +238,23 @@ struct ContentView: View {
     private var habitListView: some View {
         List {
             Section {
+                DateStrip(
+                    selection: $selectedDate,
+                    in: dateBounds,
+                    style: DateStripStyle(
+                        accent: .purple,
+                        onAccent: .white,
+                        label: .primary,
+                        secondary: .secondary,
+                        disabled: Color.secondary.opacity(0.35),
+                        dayHeight: 64,
+                        spacing: 5
+                    )
+                )
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .listRowSeparator(.hidden)
+
                 ProgressHeaderView(
                     completed: completedOnDate,
                     total: dueOnDate,

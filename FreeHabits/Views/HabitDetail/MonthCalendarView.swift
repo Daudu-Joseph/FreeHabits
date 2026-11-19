@@ -35,7 +35,7 @@ struct MonthCalendarView: View {
     }
 
     private var completedDays: Set<Date> {
-        Set((habit.completions ?? []).map { calendar.startOfDay(for: $0.date) })
+        Set((habit.completions ?? []).filter { habit.isCompleted(on: $0.date) }.map { calendar.startOfDay(for: $0.date) })
     }
 
     var body: some View {

@@ -15,6 +15,7 @@ struct HabitCardView: View {
 
     @State private var burstTrigger = false
     @State private var bounceScale: CGFloat = 1.0
+    @State private var showingLog = false
 
     private var isCompleted: Bool {
         habit.isCompleted(on: date)
@@ -22,7 +23,8 @@ struct HabitCardView: View {
 
     var body: some View {
         Button {
-            toggleCompletion()
+            if habit.trackingKind != .yesNo { showingLog = true }
+            else { toggleCompletion() }
         } label: {
             VStack(spacing: 0) {
                 // Colored top half — icon lives here
@@ -78,6 +80,7 @@ struct HabitCardView: View {
         }
         // Upgraded haptics: success notification when completing, light when un-completing
         .sensoryFeedback(.success, trigger: burstTrigger)
+        .sheet(isPresented: $showingLog) { HabitTrackingSheet(habit: habit, date: date) }
     }
 
     private func toggleCompletion() {
@@ -85,7 +88,7 @@ struct HabitCardView: View {
             let cal = Calendar.current
             if isCompleted {
                 (habit.completions ?? [])
-                    .filter { cal.isDate($0.date, inSameDayAs: date) }
+                    .filter { cal.isDate($0.date, inSameDayAs: date) && $0.isLogOnly != true }
                     .forEach { modelContext.delete($0) }
                 if cal.isDateInToday(date) {
                     NotificationManager.shared.scheduleReminder(for: habit)

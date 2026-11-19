@@ -32,4 +32,3 @@ struct FreeHabitsWatchApp: App {
         .modelContainer(sharedModelContainer)
     }
 }
-
