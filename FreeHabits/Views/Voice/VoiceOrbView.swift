@@ -20,6 +20,7 @@ struct VoiceOrbView: View {
     @State private var reminderProposal: ReminderVoiceCommand?
     @State private var conversationActive = false
     @State private var requestGeneration = UUID()
+    @State private var stopReason = "Not started"
 
     private var activeHabits: [Habit] { habits.filter { !$0.isArchived } }
     private var thoughtPalette: ThoughtOrb.Palette {
@@ -90,6 +91,8 @@ struct VoiceOrbView: View {
                     }
 
                     Text(reply).font(.title3.weight(.medium)).multilineTextAlignment(.center)
+                    Text("Voice 24 · \(UserDefaults.standard.string(forKey: "assistantTranscriber") ?? "Deepgram") · \(conversationActive ? "Session active" : stopReason)")
+                        .font(.caption).foregroundStyle(.secondary)
                     if conversationActive {
                         Button("End conversation", systemImage: "stop.circle", action: stopSession)
                             .buttonStyle(.bordered)
@@ -169,13 +172,13 @@ struct VoiceOrbView: View {
                 }.padding(24)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Voice")
+            .navigationTitle("Voice · 24")
             .toolbar { ToolbarItem(placement: .topBarTrailing) {
                 Button("Voice settings", systemImage: "slider.horizontal.3") { showSettings = true }
                     .labelStyle(.iconOnly)
             } }
             .sheet(isPresented: $showSettings) { AssistantSettingsView() }
-            .onChange(of: showSettings) { _, showing in if showing { stopSession() } }
+            .onChange(of: showSettings) { _, showing in if showing { stopReason = "Settings opened"; stopSession() } }
             .onAppear {
                 speech.onCompletedUtterance = {
                     guard conversationActive, speech.error == nil else { return }
@@ -185,20 +188,21 @@ struct VoiceOrbView: View {
             .onChange(of: speech.speaking) { wasSpeaking, speaking in
                 if wasSpeaking && !speaking { resumeConversation() }
             }
-            .onChange(of: speech.error) { _, message in if message != nil { stopSession() } }
+            .onChange(of: speech.error) { _, message in if message != nil { stopReason = "Voice service error"; stopSession() } }
             .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
                 if let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                    AVAudioSession.InterruptionType(rawValue: raw) == .began {
                     error = "Voice paused because another app interrupted audio. Tap the orb to resume."
+                    stopReason = "Audio interrupted"
                     stopSession()
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { notification in
                 if let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
-                   AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable { stopSession() }
+                   AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable { stopReason = "Audio device disconnected"; stopSession() }
             }
-            .onDisappear(perform: stopSession)
-            .onChange(of: scenePhase) { _, phase in if phase == .background { stopSession() } }
+            .onDisappear { stopReason = "Voice screen closed"; stopSession() }
+            .onChange(of: scenePhase) { _, phase in if phase == .background { stopReason = "App in background"; stopSession() } }
         }
     }
 
@@ -273,6 +277,7 @@ struct VoiceOrbView: View {
             catch {
                 guard requestGeneration == generation else { return }
                 self.error = error.localizedDescription
+                stopReason = "AI request failed"
                 stopSession()
             }
         }

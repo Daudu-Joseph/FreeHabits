@@ -27,6 +27,8 @@ final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDele
     private var limitTask: Task<Void, Never>?
     private var pauseTask: Task<Void, Never>?
     private var captureID = UUID()
+    private var lastVoiceAt = Date()
+    private var lastTranscriptAt = Date()
 
     override init() {
         super.init()
@@ -233,6 +235,7 @@ final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDele
             self.captureID = captureID
             let stream = deepgram.start(key: key, sampleRate: format.sampleRate, update: { [weak self] text in
                 guard let self, self.captureID == captureID else { return }
+                if text != self.transcript { self.lastTranscriptAt = Date() }
                 self.transcript = text
             }, finish: { [weak self] message in
                 guard let self, self.captureID == captureID else { return }
@@ -240,6 +243,16 @@ final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDele
                 else { self.finishUtterance() }
             })
             input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
+                if let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 {
+                    var energy: Float = 0
+                    for index in 0..<Int(buffer.frameLength) { energy += samples[index] * samples[index] }
+                    if sqrt(energy / Float(buffer.frameLength)) > 0.015 {
+                        Task { @MainActor [weak self] in
+                            guard let self, self.captureID == captureID else { return }
+                            self.lastVoiceAt = Date()
+                        }
+                    }
+                }
                 guard let data = DeepgramTranscriber.pcm(buffer) else { return }
                 if case .dropped = stream.yield(data) {
                     Task { @MainActor [weak self] in
@@ -254,6 +267,20 @@ final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDele
             try engine.start()
             listening = true
             Self.microphoneInUse = true
+            lastVoiceAt = Date()
+            lastTranscriptAt = Date()
+            pauseTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(200))
+                    guard !Task.isCancelled, let self, self.captureID == captureID, self.listening else { return }
+                    if !self.transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                       Date().timeIntervalSince(self.lastVoiceAt) >= 2,
+                       Date().timeIntervalSince(self.lastTranscriptAt) >= 1.2 {
+                        self.finishUtterance()
+                        return
+                    }
+                }
+            }
         } catch {
             stop()
             self.error = "Couldn't start the microphone. Please try again."
