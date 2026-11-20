@@ -47,8 +47,12 @@ struct VoiceOrbView: View {
                         .padding(.top, 20)
 
                     Button(action: tapOrb) {
-                        AssistantOrb(size: 280, palette: palette)
-                            .accessibilityHidden(true)
+                        ZStack {
+                            Circle().fill(.clear)
+                            AssistantOrb(size: 280, palette: palette).accessibilityHidden(true)
+                        }
+                        .frame(width: 280, height: 280)
+                        .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
                     .disabled(thinking || speech.requesting)

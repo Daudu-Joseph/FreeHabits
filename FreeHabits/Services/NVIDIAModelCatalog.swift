@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 import CryptoKit
 
 struct NVIDIAAvailableModel: Codable, Identifiable, Equatable {

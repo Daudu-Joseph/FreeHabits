@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import Speech
 import AVFoundation
 
@@ -124,9 +125,14 @@ final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDele
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor [weak self] in self?.speaking = false }
+        Task { @MainActor [weak self] in self?.releasePlayback() }
     }
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        Task { @MainActor [weak self] in self?.speaking = false }
+        Task { @MainActor [weak self] in self?.releasePlayback() }
+    }
+    private func releasePlayback() {
+        guard !synthesizer.isSpeaking else { return }
+        speaking = false
+        if !listening { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
     }
 }
