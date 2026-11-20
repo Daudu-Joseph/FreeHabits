@@ -15,3 +15,6 @@ Retrieved 2026-11-19 from the official SwiftPieces registry. The component sourc
 | TimerDial | [registry/swift/controls/TimerDial.swift](https://github.com/Saivion/SwiftPieces/blob/main/registry/swift/controls/TimerDial.swift) | 2.2.0 | [Timer Dial](https://swiftpieces.com/docs/components/controls/timer-dial) | Set, start, pause and reset the focus countdown. |
 
 The other dashboard cards and tracking controls remain custom SwiftUI and Apple Charts. They follow the supplied Streak screenshots; no Streak source or paid SwiftPieces component code was copied.
+# Thought Orb addition
+
+ThoughtOrb.swift and ThoughtOrb.metal: SwiftPieces Thought Orb 1.2.0, retrieved from https://swiftpieces.com/api/registry/ThoughtOrb on 2026-11-20. Original source and copyright retained. Used for the voice surface and morphing status pill; its animation is decorative, not an audio amplitude measurement.

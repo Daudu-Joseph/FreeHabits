@@ -5,6 +5,7 @@ import AVFoundation
 
 @MainActor
 final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+    static var microphoneInUse = false
     @Published var transcript = ""
     @Published var listening = false
     @Published var requesting = false
@@ -24,6 +25,7 @@ final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDele
 
     func start() async {
         guard !requesting else { return }
+        NotificationManager.shared.stopSpeaking()
         requesting = true
         defer { requesting = false }
         stop()
@@ -79,6 +81,7 @@ final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDele
             engine.prepare()
             try engine.start()
             listening = true
+            Self.microphoneInUse = true
             limitTask = Task { [weak self] in
                 try? await Task.sleep(for: .seconds(55))
                 guard !Task.isCancelled else { return }
@@ -92,6 +95,7 @@ final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDele
 
     func stop() {
         listening = false
+        Self.microphoneInUse = false
         limitTask?.cancel()
         limitTask = nil
         engine.stop()
@@ -104,6 +108,7 @@ final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDele
     }
 
     func say(_ text: String) {
+        NotificationManager.shared.stopSpeaking()
         stop()
         synthesizer.stopSpeaking(at: .immediate)
         do {

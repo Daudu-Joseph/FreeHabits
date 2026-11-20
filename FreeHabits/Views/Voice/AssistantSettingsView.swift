@@ -97,10 +97,11 @@ struct AssistantSettingsView: View {
                     }
 
                     card("Reminders") {
+                        ReminderPreferencesView().zIndex(10)
                         Toggle("Evening check-in at 8 pm", isOn: $eveningCheckInEnabled)
                         Button("Allow notifications") { Task { _ = await NotificationManager.shared.requestAuthorization() } }
                             .buttonStyle(.bordered)
-                        Text("Reminders follow habit schedules and pause dates. Today's check-in is cancelled when everything due is complete. Open the app at least once a week to renew the reminder plan.")
+                        Text("Reminders follow habit schedules and pause dates. Completing or skipping a habit cancels its remaining alerts today. The queue is renewed whenever you open the app or act on a notification.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
 

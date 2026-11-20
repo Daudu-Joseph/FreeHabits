@@ -16,8 +16,15 @@ struct VoiceOrbView: View {
     @State private var requestTask: Task<Void, Never>?
     @State private var microphoneTask: Task<Void, Never>?
     @State private var error: String?
+    @State private var reminderProposal: ReminderVoiceCommand?
 
     private var activeHabits: [Habit] { habits.filter { !$0.isArchived } }
+    private var thoughtPalette: ThoughtOrb.Palette {
+        if speech.listening { return .searching }
+        if speech.speaking { return .writing }
+        if !pending.isEmpty { return .reading }
+        return .siri
+    }
     private var status: String {
         if speech.requesting { return "Getting ready" }
         if speech.listening { return "Listening" }
@@ -49,7 +56,7 @@ struct VoiceOrbView: View {
                     Button(action: tapOrb) {
                         ZStack {
                             Circle().fill(.clear)
-                            AssistantOrb(size: 280, palette: palette).accessibilityHidden(true)
+                            ThoughtOrb(size: 280, palette: thoughtPalette).accessibilityHidden(true)
                         }
                         .frame(width: 280, height: 280)
                         .contentShape(Circle())
@@ -59,6 +66,9 @@ struct VoiceOrbView: View {
                     .accessibilityLabel(speech.listening ? "Stop listening" : "Talk to FreeHabits")
                     .accessibilityValue(status)
                     .accessibilityHint("Tap to start or stop the microphone. Review the transcript before sending.")
+
+                    ThoughtOrb.Pill(status, palette: thoughtPalette, showsDots: thinking || speech.listening)
+                        .accessibilityLabel(status)
 
                     if speech.listening || !speech.transcript.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
@@ -79,6 +89,26 @@ struct VoiceOrbView: View {
                     }
 
                     Text(reply).font(.title3.weight(.medium)).multilineTextAlignment(.center)
+                    OverdueHabitsCard()
+                    if let proposal = reminderProposal {
+                        VStack(spacing: 12) {
+                            Text(proposal.summary).font(.headline)
+                            HStack {
+                                Button("Cancel") { reminderProposal = nil }
+                                Button("Confirm") {
+                                    Task { @MainActor in
+                                        do {
+                                            try await NotificationManager.shared.act(proposal.action, habit: proposal.habit, day: Date(), snoozeMinutes: proposal.minutes)
+                                            reminderProposal = nil
+                                            speech.transcript = ""
+                                            reply = "Saved. " + proposal.summary
+                                            speech.say(reply)
+                                        } catch { self.error = "Couldn't save the reminder action. Please try again." }
+                                    }
+                                }.buttonStyle(.borderedProminent)
+                            }
+                        }.padding(18)
+                    }
 
                     if !pending.isEmpty {
                         VStack(alignment: .leading, spacing: 14) {
@@ -138,8 +168,9 @@ struct VoiceOrbView: View {
     }
 
     private func tapOrb() {
+        NotificationManager.shared.stopSpeaking()
+        guard reminderProposal == nil else { return }
         guard pending.isEmpty else { speech.say("Review your check-in, then tap Save logs or Cancel."); return }
-        guard sharing, AssistantKeychain.read() != nil else { showSettings = true; return }
         if speech.listening { speech.stop() }
         else {
             error = nil
@@ -148,9 +179,16 @@ struct VoiceOrbView: View {
     }
 
     private func send() {
-        guard !thinking, sharing, pending.isEmpty else { return }
+        guard !thinking, pending.isEmpty, reminderProposal == nil else { return }
         let text = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, text.count <= 4000 else { error = "Keep your voice note under 4,000 characters."; return }
+        if let command = ReminderVoiceCommand.parse(text, habits: activeHabits) {
+            speech.stop(); speech.silence()
+            reminderProposal = command
+            reply = "Please confirm this reminder action."
+            return
+        }
+        guard sharing, AssistantKeychain.read() != nil else { showSettings = true; return }
         speech.stop()
         speech.silence()
         error = nil

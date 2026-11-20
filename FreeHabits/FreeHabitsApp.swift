@@ -27,11 +27,14 @@ struct FreeHabitsApp: App {
 
     var body: some Scene {
         WindowGroup {
+            Group {
             if hasCompletedOnboarding {
                 FreeHabitsRootView()
             } else {
                 OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
             }
+            }
+            .task { NotificationManager.shared.configure(container: sharedModelContainer) }
         }
         .modelContainer(sharedModelContainer)
     }

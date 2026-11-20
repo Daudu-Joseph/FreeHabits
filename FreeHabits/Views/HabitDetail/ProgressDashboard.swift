@@ -6,6 +6,11 @@ struct FreeHabitsRootView: View {
     @Query private var allRecords: [HabitCompletion]
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("eveningCheckInEnabled") private var eveningCheckInEnabled = true
+    @AppStorage("reminderRepeatsEnabled") private var reminderRepeats = true
+    @AppStorage("reminderRepeatMinutes") private var repeatMinutes = 15
+    @AppStorage("reminderQuietEnabled") private var quietEnabled = true
+    @AppStorage("reminderQuietStart") private var quietStart = 22
+    @AppStorage("reminderQuietEnd") private var quietEnd = 8
     private var reminderRevision: String {
         let habits = allHabits.map {
             "\($0.persistentModelID)|\($0.name)|\($0.reminderTime ?? -1)|\($0.archivedAt?.timeIntervalSince1970 ?? 0)|\($0.frequencyData?.base64EncodedString() ?? "")|\($0.pausedRangesData?.base64EncodedString() ?? "")|\($0.trackingKindRaw ?? "")|\($0.targetAmount ?? 0)|\($0.checklistItemsData?.base64EncodedString() ?? "")"
@@ -13,7 +18,7 @@ struct FreeHabitsRootView: View {
         let records = allRecords.map {
             "\($0.persistentModelID)|\($0.date.timeIntervalSince1970)|\($0.amountValue ?? 0)|\($0.isRelapse ?? false)|\($0.isLogOnly ?? false)|\($0.checklistData?.base64EncodedString() ?? "")"
         }.joined(separator: ";")
-        return habits + records + "\(eveningCheckInEnabled)"
+        return habits + records + "\(eveningCheckInEnabled)|\(reminderRepeats)|\(repeatMinutes)|\(quietEnabled)|\(quietStart)|\(quietEnd)"
     }
     var body: some View {
         TabView {
@@ -27,6 +32,7 @@ struct FreeHabitsRootView: View {
         .task(id: reminderRevision) { await NotificationManager.shared.refresh(habits: allHabits) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await NotificationManager.shared.refresh(habits: allHabits) } }
+            else { NotificationManager.shared.stopSpeaking() }
         }
     }
 }

@@ -33,6 +33,8 @@ final class Habit {
     var category: String?
     var checklistItemsData: Data?
     var pausedRangesData: Data?
+    /// Stable local reminder identity, assigned when notification scheduling first runs.
+    var reminderID: String?
 
     @Relationship(deleteRule: .cascade, inverse: \HabitCompletion.habit)
     var completions: [HabitCompletion]?
