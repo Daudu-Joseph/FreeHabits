@@ -31,8 +31,13 @@ precondition(metadata == nil)
 
 var gap = DeepgramTurn()
 _ = try gap.consume(result("Gym is done", final: true))
-let gapEnd = try gap.consume(event("UtteranceEnd"))!
+// Real UtteranceEnd uses an array for channel; Results uses an object.
+let staleGap = try gap.consume(Data("{\"type\":\"UtteranceEnd\",\"channel\":[0,1],\"last_word_end\":-1}".utf8))
+precondition(staleGap == nil)
+let gapEnd = try gap.consume(Data("{\"type\":\"UtteranceEnd\",\"channel\":[0,1],\"last_word_end\":2.395}".utf8))!
 precondition(gapEnd.text == "Gym is done" && gapEnd.complete)
+let speechStarted = try gap.consume(Data("{\"type\":\"SpeechStarted\",\"channel\":[0,1],\"timestamp\":0.5}".utf8))
+precondition(speechStarted == nil)
 do {
     _ = try gap.consume(event("Error"))
     fatalError("Provider error must never submit a turn")

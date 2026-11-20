@@ -85,7 +85,15 @@ final class DeepgramTranscriber {
             } catch {
                 guard let self, self.generation == generation, !Task.isCancelled else { return }
                 self.stop()
-                finish("Deepgram couldn't connect. Check your key and internet connection in Voice settings.")
+                if error is DecodingError {
+                    finish("Deepgram transcription message could not be read (STT decode).")
+                } else if error is DeepgramTurn.Failure {
+                    finish("Deepgram rejected transcription (STT provider error). Check your key and quota.")
+                } else {
+                    let status = (socket.response as? HTTPURLResponse)?.statusCode
+                    let code = (error as NSError).code
+                    finish("Deepgram transcription connection failed (HTTP \(status.map(String.init) ?? "unknown"), code \(code)). Check your key and connection.")
+                }
             }
         }
         deadline = Task { [weak self] in

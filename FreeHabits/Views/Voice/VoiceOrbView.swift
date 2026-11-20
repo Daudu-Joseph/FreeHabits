@@ -91,7 +91,7 @@ struct VoiceOrbView: View {
                     }
 
                     Text(reply).font(.title3.weight(.medium)).multilineTextAlignment(.center)
-                    Text("Voice 24 · \(UserDefaults.standard.string(forKey: "assistantTranscriber") ?? "Deepgram") · \(conversationActive ? "Session active" : stopReason)")
+                    Text("Voice 25 · \(UserDefaults.standard.string(forKey: "assistantTranscriber") ?? "Deepgram") · \(conversationActive ? "Session active" : stopReason)")
                         .font(.caption).foregroundStyle(.secondary)
                     if conversationActive {
                         Button("End conversation", systemImage: "stop.circle", action: stopSession)
@@ -172,7 +172,7 @@ struct VoiceOrbView: View {
                 }.padding(24)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Voice · 24")
+            .navigationTitle("Voice · 25")
             .toolbar { ToolbarItem(placement: .topBarTrailing) {
                 Button("Voice settings", systemImage: "slider.horizontal.3") { showSettings = true }
                     .labelStyle(.iconOnly)

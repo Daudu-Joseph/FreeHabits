@@ -9,8 +9,15 @@ struct DeepgramTurn {
     var hasFinalizedTurn: Bool { !finalized.isEmpty && interim.isEmpty }
 
     mutating func consume(_ data: Data) throws -> Update? {
-        let event = try JSONDecoder().decode(Event.self, from: data)
-        if event.type == "Error" { throw Failure.rejected }
+        let decoder = JSONDecoder()
+        let header = try decoder.decode(Header.self, from: data)
+        if header.type == "Error" { throw Failure.rejected }
+        if header.type == "UtteranceEnd" {
+            guard header.last_word_end != -1, !finalized.isEmpty, interim.isEmpty else { return nil }
+            return Update(text: finalized, complete: true)
+        }
+        guard header.type == "Results" else { return nil }
+        let event = try decoder.decode(Event.self, from: data)
         if event.type == "Results", let text = event.channel?.alternatives.first?.transcript {
             if event.is_final == true {
                 finalized = [finalized, text].filter { !$0.isEmpty }.joined(separator: " ")
@@ -19,10 +26,12 @@ struct DeepgramTurn {
             return Update(text: [finalized, interim].filter { !$0.isEmpty }.joined(separator: " "),
                           complete: event.speech_final == true && event.is_final == true && !finalized.isEmpty)
         }
-        if event.type == "UtteranceEnd", !finalized.isEmpty, interim.isEmpty {
-            return Update(text: finalized, complete: true)
-        }
         return nil
+    }
+
+    private struct Header: Decodable {
+        let type: String
+        let last_word_end: Double?
     }
 
     private struct Event: Decodable {
