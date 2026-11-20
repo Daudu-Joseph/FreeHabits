@@ -12,6 +12,7 @@ final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDele
     @Published var requesting = false
     @Published var speaking = false
     @Published var completedUtterance = UUID()
+    var onCompletedUtterance: (@MainActor () -> Void)?
     @Published var speechStartDelay: Double?
     @Published var error: String?
     private let engine = AVAudioEngine()
@@ -263,6 +264,7 @@ final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDele
         stop()
         if !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             completedUtterance = UUID()
+            onCompletedUtterance?()
         }
     }
 }

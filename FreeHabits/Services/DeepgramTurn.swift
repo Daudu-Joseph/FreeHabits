@@ -6,6 +6,7 @@ struct DeepgramTurn {
     struct Update { let text: String; let complete: Bool }
     private var finalized = ""
     private var interim = ""
+    var hasFinalizedTurn: Bool { !finalized.isEmpty && interim.isEmpty }
 
     mutating func consume(_ data: Data) throws -> Update? {
         let event = try JSONDecoder().decode(Event.self, from: data)

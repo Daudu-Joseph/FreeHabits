@@ -9,6 +9,7 @@ final class DeepgramTranscriber {
     private var receiver: Task<Void, Never>?
     private var sender: Task<Void, Never>?
     private var deadline: Task<Void, Never>?
+    private var endpointFallback: Task<Void, Never>?
     private var continuation: AsyncStream<Data>.Continuation?
     private var generation = UUID()
     private var turn = DeepgramTurn()
@@ -63,11 +64,21 @@ final class DeepgramTranscriber {
                     @unknown default: continue
                     }
                     if let result = try self.turn.consume(data) {
+                        self.endpointFallback?.cancel()
                         update(result.text)
                         if result.complete {
                             self.stop()
                             finish(nil)
                             return
+                        }
+                        if self.turn.hasFinalizedTurn {
+                            self.endpointFallback = Task { [weak self] in
+                                try? await Task.sleep(for: .milliseconds(1600))
+                                guard !Task.isCancelled, let self, self.generation == generation,
+                                      self.turn.hasFinalizedTurn else { return }
+                                self.stop()
+                                finish(nil)
+                            }
                         }
                     }
                 }
@@ -87,6 +98,7 @@ final class DeepgramTranscriber {
     }
 
     func stop() {
+        endpointFallback?.cancel(); endpointFallback = nil
         generation = UUID()
         continuation?.finish(); continuation = nil
         sender?.cancel(); sender = nil

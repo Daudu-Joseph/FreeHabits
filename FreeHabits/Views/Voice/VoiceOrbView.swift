@@ -176,8 +176,9 @@ struct VoiceOrbView: View {
             } }
             .sheet(isPresented: $showSettings) { AssistantSettingsView() }
             .onChange(of: showSettings) { _, showing in if showing { stopSession() } }
-            .onChange(of: speech.completedUtterance) { _, _ in
-                if conversationActive && !speech.transcript.isEmpty && speech.error == nil {
+            .onAppear {
+                speech.onCompletedUtterance = {
+                    guard conversationActive, speech.error == nil else { return }
                     send()
                 }
             }
@@ -185,13 +186,19 @@ struct VoiceOrbView: View {
                 if wasSpeaking && !speaking { resumeConversation() }
             }
             .onChange(of: speech.error) { _, message in if message != nil { stopSession() } }
-            .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { _ in stopSession() }
+            .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
+                if let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                   AVAudioSession.InterruptionType(rawValue: raw) == .began {
+                    error = "Voice paused because another app interrupted audio. Tap the orb to resume."
+                    stopSession()
+                }
+            }
             .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { notification in
                 if let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
                    AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable { stopSession() }
             }
             .onDisappear(perform: stopSession)
-            .onChange(of: scenePhase) { _, phase in if phase != .active { stopSession() } }
+            .onChange(of: scenePhase) { _, phase in if phase == .background { stopSession() } }
         }
     }
 
