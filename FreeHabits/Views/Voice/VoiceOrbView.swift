@@ -200,7 +200,17 @@ struct VoiceOrbView: View {
         guard reminderProposal == nil else { return }
         guard pending.isEmpty else { speech.say("Review your check-in, then tap Save logs or Cancel."); return }
         if conversationActive && speech.speaking { speech.silence(); resumeConversation() }
-        else if conversationActive { stopSession() }
+        else if conversationActive && speech.listening {
+            let transcript = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            speech.stop()
+            if transcript.isEmpty {
+                reply = "I didn't catch that. Try again."
+                resumeConversation()
+            } else {
+                send()
+            }
+        }
+        else if conversationActive { resumeConversation() }
         else {
             error = nil
             conversationActive = true
