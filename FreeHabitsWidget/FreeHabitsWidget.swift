@@ -6,7 +6,7 @@ private let freeHabitsGroup = "group.com.daudu.joseph.freehabits"
 private let snapshotKey = "habit-widget-snapshot-v1"
 private let actionsKey = "habit-widget-actions-v1"
 
-private struct WidgetHabit: Codable, Identifiable {
+struct WidgetHabit: Codable, Identifiable {
     var id: String
     var name: String
     var icon: String
@@ -16,12 +16,12 @@ private struct WidgetHabit: Codable, Identifiable {
     var amountProgress: String?
     var snoozeMinutes: Int
 }
-private struct WidgetSnapshot: Codable {
+struct WidgetSnapshot: Codable {
     var updatedAt: Date
     var day: Date
     var items: [WidgetHabit]
 }
-private struct QueuedAction: Codable {
+struct QueuedAction: Codable {
     var id = UUID()
     var habitID: String
     var action: String
