@@ -3,6 +3,14 @@ import SwiftUI
 struct AssistantSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var catalog = NVIDIAModelCatalog()
+    @StateObject private var voicePreview = AssistantSpeech()
+    @AppStorage("assistantTranscriber") private var transcriber = "Deepgram"
+    @AppStorage("assistantVoiceEngine") private var voiceEngine = "Deepgram"
+    @AppStorage("assistantDeepgramVoice") private var deepgramVoice = DeepgramSpeaker.defaultVoice
+    @AppStorage("assistantDeepgramEnabled") private var deepgramEnabled = false
+    @State private var deepgramKey = ""
+    @State private var hasDeepgramKey = AssistantKeychain.read(service: "Deepgram") != nil
+    @State private var deepgramMessage: String?
     @AppStorage("assistantModel") private var model = VoiceAssistantService.defaultModel
     @AppStorage("assistantSharingEnabled") private var sharing = false
     @AppStorage("eveningCheckInEnabled") private var eveningCheckInEnabled = true
@@ -22,6 +30,54 @@ struct AssistantSettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    card("Conversation voice") {
+                        SecureField(hasDeepgramKey ? "Replace your Deepgram key" : "Paste your Deepgram API key", text: $deepgramKey)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                            .textFieldStyle(.roundedBorder)
+                        Button("Save key and enable Deepgram", systemImage: "key.fill") {
+                            voicePreview.silence()
+                            do {
+                                try AssistantKeychain.save(deepgramKey, service: "Deepgram")
+                                deepgramKey = ""; hasDeepgramKey = true; deepgramEnabled = true
+                                transcriber = "Deepgram"; voiceEngine = "Deepgram"
+                                deepgramMessage = "Key saved securely. Preview a voice, then try a conversation to check transcription."
+                            } catch { deepgramMessage = error.localizedDescription }
+                        }.buttonStyle(.borderedProminent).tint(.purple)
+                        Text("Deepgram receives microphone audio while Listening and reply text for speech. Both use your Deepgram account quota. NVIDIA still generates the replies. Keys are stored separately in Keychain.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        if let deepgramMessage { Text(deepgramMessage).font(.footnote) }
+                        SelectMenu("Transcription", selection: $transcriber, options: ["Deepgram", "Apple"],
+                            style: SelectMenuStyle(accent: .purple, onAccent: .primary)) {
+                                $0 == "Apple" ? "iPhone speech recognition" : "Deepgram · streaming English"
+                            }.zIndex(30)
+                        SelectMenu("Spoken replies", selection: $voiceEngine, options: ["Deepgram", "Apple"],
+                            style: SelectMenuStyle(accent: .purple, onAccent: .primary)) {
+                                $0 == "Apple" ? "iPhone voice" : "Deepgram · streaming voice"
+                            }.zIndex(20)
+                        if voiceEngine == "Deepgram" {
+                            SelectMenu("Voice", selection: $deepgramVoice, options: DeepgramSpeaker.voices,
+                                style: SelectMenuStyle(accent: .purple, onAccent: .primary)) { DeepgramSpeaker.label($0) }
+                                .zIndex(10)
+                        }
+                        Button(voicePreview.speaking ? "Stop preview" : "Preview selected voice", systemImage: "speaker.wave.2") {
+                            if voicePreview.speaking { voicePreview.silence() }
+                            else { voicePreview.say("Hi, I'm here. Tell me what you did, and we'll take it one habit at a time.") }
+                        }.buttonStyle(.bordered)
+                            .disabled(voiceEngine == "Deepgram" && (!hasDeepgramKey || !deepgramEnabled))
+                        if let error = voicePreview.error { Text(error).font(.footnote).foregroundStyle(.red) }
+                        if hasDeepgramKey {
+                            Toggle("Allow audio and speech text to Deepgram", isOn: $deepgramEnabled)
+                            Button("Remove Deepgram key", role: .destructive) {
+                                voicePreview.silence()
+                                AssistantKeychain.remove(service: "Deepgram")
+                                hasDeepgramKey = false; deepgramEnabled = false; deepgramKey = ""
+                                transcriber = "Apple"; voiceEngine = "Apple"
+                                deepgramMessage = "Deepgram key removed. Using iPhone speech."
+                            }
+                        }
+                        Text("Tap the orb once. A short pause sends your turn automatically; listening resumes when playback finishes. Tap the speaking orb to interrupt and talk. End conversation stops the microphone and playback. Habit changes still need confirmation.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }.zIndex(40)
                     card("NVIDIA connection") {
                         SecureField(hasKey ? "Paste a replacement key" : "Paste your NVIDIA API key", text: $key)
                             .textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -106,9 +162,9 @@ struct AssistantSettingsView: View {
                     }
 
                     card("Your data") {
-                        Text("Tap Send to share your transcript, recent conversation and a habit summary with NVIDIA. Journal notes are excluded; anything spoken in the voice note is included.")
+                        Text("During a conversation, each completed turn shares your transcript, recent conversation and a habit summary with NVIDIA. Journal notes are excluded; anything you speak is included.")
                         Text("The key stays in Keychain and is excluded from habit backups. The model cache contains model IDs and check results, tied to a one-way fingerprint of the key.")
-                        Text("iPhone speech recognition transcribes on-device when supported; otherwise Apple may process audio. The orb uses the iPhone voice for replies. Session conversation stays in memory, and logs are saved only after your confirmation.")
+                        Text("When Deepgram is selected and enabled, microphone audio is streamed to Deepgram and reply text is sent there for speech. Otherwise, iPhone speech recognition uses Apple processing or on-device recognition when supported. Conversation history stays in memory, and logs are saved only after your confirmation.")
                         if hasKey {
                             Button("Remove key and model cache", role: .destructive) {
                                 discoveryTask?.cancel()
@@ -127,7 +183,10 @@ struct AssistantSettingsView: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
             .onAppear { catalog.load(); selectAvailableModel() }
             .onChange(of: catalog.usable) { _, _ in selectAvailableModel() }
-            .onDisappear { discoveryTask?.cancel() }
+            .onDisappear { discoveryTask?.cancel(); voicePreview.silence() }
+            .onChange(of: deepgramVoice) { _, _ in voicePreview.silence() }
+            .onChange(of: voiceEngine) { _, _ in voicePreview.silence() }
+            .onChange(of: deepgramEnabled) { _, enabled in if !enabled { voicePreview.silence() } }
         }
     }
 

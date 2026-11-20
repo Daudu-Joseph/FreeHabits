@@ -3,13 +3,13 @@ import Security
 import SwiftData
 
 enum AssistantKeychain {
-    private static var query: [String: Any] {
+    private static func query(service: String) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,
-         kSecAttrService as String: "FreeHabits.NVIDIA",
+         kSecAttrService as String: "FreeHabits.\(service)",
          kSecAttrAccount as String: "personal-api-key"]
     }
-    static func read() -> String? {
-        var request = query
+    static func read(service: String = "NVIDIA") -> String? {
+        var request = query(service: service)
         request[kSecReturnData as String] = true
         request[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
@@ -17,14 +17,14 @@ enum AssistantKeychain {
               let data = result as? Data else { return nil }
         return String(data: data, encoding: .utf8)
     }
-    static func save(_ key: String) throws {
+    static func save(_ key: String, service: String = "NVIDIA") throws {
         let value = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { throw AssistantError.message("Enter your NVIDIA API key.") }
+        guard !value.isEmpty else { throw AssistantError.message("Enter your \(service) API key.") }
         let attributes: [String: Any] = [kSecValueData as String: Data(value.utf8),
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]
-        let updated = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        let updated = SecItemUpdate(query(service: service) as CFDictionary, attributes as CFDictionary)
         if updated == errSecItemNotFound {
-            var request = query
+            var request = query(service: service)
             attributes.forEach { request[$0.key] = $0.value }
             guard SecItemAdd(request as CFDictionary, nil) == errSecSuccess else {
                 throw AssistantError.message("Could not store your key securely.")
@@ -33,7 +33,7 @@ enum AssistantKeychain {
             throw AssistantError.message("Could not update your saved key.")
         }
     }
-    static func remove() { SecItemDelete(query as CFDictionary) }
+    static func remove(service: String = "NVIDIA") { SecItemDelete(query(service: service) as CFDictionary) }
 }
 
 enum AssistantError: LocalizedError {
@@ -79,6 +79,13 @@ struct PreparedHabitLog: Identifiable {
 
 enum VoiceAssistantService {
     static let defaultModel = "nvidia/llama-3.3-nemotron-super-49b-v1.5"
+    // Reuse connections between turns instead of tearing down TLS after each reply.
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 45
+        configuration.timeoutIntervalForResource = 60
+        return URLSession(configuration: configuration)
+    }()
 
     static func dateString(_ date: Date) -> String {
         let formatter = DateFormatter()
@@ -96,12 +103,13 @@ enum VoiceAssistantService {
         }
         let calendar = Calendar.current
         let context: [[String: Any]] = habits.enumerated().map { index, habit in
+            let metrics = habit.recentMetrics
             var entry: [String: Any] = ["id": "habit-\(index)", "name": habit.name,
                 "kind": habit.trackingKind.rawValue, "schedule": habit.frequency.displayName,
                 "created": dateString(habit.createdAt), "completed_today": habit.isCompletedToday,
                 "paused_today": habit.isPaused(on: .now), "streak": habit.currentStreak,
-                "last_30_days_completed": habit.recentMetrics.completed,
-                "last_30_days_expected": habit.recentMetrics.expected,
+                "last_30_days_completed": metrics.completed,
+                "last_30_days_expected": metrics.expected,
                 "checklist_items": habit.checklistItems]
             if let target = habit.targetAmount { entry["target"] = target }
             if let unit = habit.amountUnit { entry["unit"] = unit }
@@ -113,6 +121,7 @@ enum VoiceAssistantService {
         let contextData = try JSONSerialization.data(withJSONObject: context, options: [.sortedKeys])
         let system = """
         You are FreeHabits, a concise, kind voice assistant for a personal habit tracker.
+        Speak naturally in one or two short sentences unless the user asks for detail.
         Today is \(dateString(.now)); timezone \(TimeZone.current.identifier).
         Return ONLY one JSON object: {"reply":"short spoken reply","logs":[]}.
         For explicit user requests to record habits, logs may contain objects:
@@ -135,13 +144,9 @@ enum VoiceAssistantService {
             let model: String
             let messages: [AssistantMessage]
             let temperature = 0.2
-            let max_tokens = 2048
+            let max_tokens = 768
             let stream = false
         }
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 90
-        let session = URLSession(configuration: configuration)
-        defer { session.invalidateAndCancel() }
         var request = URLRequest(url: URL(string: "https://integrate.api.nvidia.com/v1/chat/completions")!)
         request.httpMethod = "POST"
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")

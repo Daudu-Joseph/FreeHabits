@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import AVFoundation
 
 struct VoiceOrbView: View {
     @Environment(\.modelContext) private var context
@@ -17,6 +18,8 @@ struct VoiceOrbView: View {
     @State private var microphoneTask: Task<Void, Never>?
     @State private var error: String?
     @State private var reminderProposal: ReminderVoiceCommand?
+    @State private var conversationActive = false
+    @State private var requestGeneration = UUID()
 
     private var activeHabits: [Habit] { habits.filter { !$0.isArchived } }
     private var thoughtPalette: ThoughtOrb.Palette {
@@ -63,9 +66,9 @@ struct VoiceOrbView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(thinking || speech.requesting)
-                    .accessibilityLabel(speech.listening ? "Stop listening" : "Talk to FreeHabits")
+                    .accessibilityLabel(speech.speaking ? "Interrupt and talk" : (conversationActive ? "End conversation" : "Talk to FreeHabits"))
                     .accessibilityValue(status)
-                    .accessibilityHint("Tap to start or stop the microphone. Review the transcript before sending.")
+                    .accessibilityHint("Pause to send your turn. Tap during a reply to interrupt and talk.")
 
                     ThoughtOrb.Pill(status, palette: thoughtPalette, showsDots: thinking || speech.listening)
                         .accessibilityLabel(status)
@@ -76,9 +79,7 @@ struct VoiceOrbView: View {
                             TextField("Your voice note", text: $speech.transcript, axis: .vertical)
                                 .lineLimit(2...5)
                                 .disabled(speech.listening || thinking)
-                            if speech.listening {
-                                Button("Finish recording", systemImage: "stop.circle.fill") { speech.stop() }
-                            } else if pending.isEmpty {
+                            if !conversationActive && !speech.listening && pending.isEmpty {
                                 Button("Send voice note", systemImage: "arrow.up.circle.fill", action: send)
                                     .buttonStyle(.borderedProminent).tint(.purple)
                                     .disabled(thinking || speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -89,12 +90,21 @@ struct VoiceOrbView: View {
                     }
 
                     Text(reply).font(.title3.weight(.medium)).multilineTextAlignment(.center)
+                    if conversationActive {
+                        Button("End conversation", systemImage: "stop.circle", action: stopSession)
+                            .buttonStyle(.bordered)
+                    }
                     OverdueHabitsCard()
                     if let proposal = reminderProposal {
                         VStack(spacing: 12) {
                             Text(proposal.summary).font(.headline)
                             HStack {
-                                Button("Cancel") { reminderProposal = nil }
+                                Button("Cancel") {
+                                    reminderProposal = nil
+                                    speech.transcript = ""
+                                    speech.silence()
+                                    resumeConversation()
+                                }
                                 Button("Confirm") {
                                     Task { @MainActor in
                                         do {
@@ -128,6 +138,7 @@ struct VoiceOrbView: View {
                                     reply = "Nothing saved. Tap the orb to try again."
                                     speech.transcript = ""
                                     speech.silence()
+                                    resumeConversation()
                                 }.buttonStyle(.bordered)
                                 Spacer()
                                 Button("Save logs", systemImage: "checkmark", action: save)
@@ -138,7 +149,10 @@ struct VoiceOrbView: View {
                     }
 
                     if speech.speaking {
-                        Button("Stop speaking", systemImage: "speaker.slash") { speech.silence() }
+                        Button("Interrupt and talk", systemImage: "mic") {
+                            speech.silence()
+                            resumeConversation()
+                        }
                             .buttonStyle(.bordered)
                     }
                     if let message = error ?? speech.error {
@@ -150,7 +164,7 @@ struct VoiceOrbView: View {
                     }
                     Text("Try “I drank two glasses of water” or “How am I doing this week?”")
                         .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    Text("The microphone runs only while Listening. Exact reminder commands are handled locally after confirmation. Other voice notes share your words and habit summary with NVIDIA when you tap Send.")
+                    Text("Pause to send your turn automatically. Deepgram receives audio and speaks replies when enabled; NVIDIA receives your words and habit summary. Listening resumes after playback. End conversation stops the session. Habit changes need confirmation.")
                         .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }.padding(24)
             }
@@ -162,6 +176,20 @@ struct VoiceOrbView: View {
             } }
             .sheet(isPresented: $showSettings) { AssistantSettingsView() }
             .onChange(of: showSettings) { _, showing in if showing { stopSession() } }
+            .onChange(of: speech.completedUtterance) { _, _ in
+                if conversationActive && !speech.transcript.isEmpty && speech.error == nil {
+                    send()
+                }
+            }
+            .onChange(of: speech.speaking) { wasSpeaking, speaking in
+                if wasSpeaking && !speaking { resumeConversation() }
+            }
+            .onChange(of: speech.error) { _, message in if message != nil { stopSession() } }
+            .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { _ in stopSession() }
+            .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { notification in
+                if let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+                   AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable { stopSession() }
+            }
             .onDisappear(perform: stopSession)
             .onChange(of: scenePhase) { _, phase in if phase != .active { stopSession() } }
         }
@@ -171,21 +199,36 @@ struct VoiceOrbView: View {
         NotificationManager.shared.stopSpeaking()
         guard reminderProposal == nil else { return }
         guard pending.isEmpty else { speech.say("Review your check-in, then tap Save logs or Cancel."); return }
-        if speech.listening { speech.stop() }
+        if conversationActive && speech.speaking { speech.silence(); resumeConversation() }
+        else if conversationActive { stopSession() }
         else {
             error = nil
+            conversationActive = true
             microphoneTask = Task { await speech.start() }
         }
+    }
+
+    private func resumeConversation() {
+        guard conversationActive, !thinking, pending.isEmpty, reminderProposal == nil,
+              scenePhase == .active, !showSettings, !speech.listening, !speech.requesting,
+              speech.error == nil else { return }
+        microphoneTask = Task { await speech.start() }
     }
 
     private func send() {
         guard !thinking, pending.isEmpty, reminderProposal == nil else { return }
         let text = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, text.count <= 4000 else { error = "Keep your voice note under 4,000 characters."; return }
+        guard !text.isEmpty, text.count <= 4000 else {
+            error = "Keep your voice note under 4,000 characters."
+            stopSession()
+            return
+        }
+        conversationActive = true
         if let command = ReminderVoiceCommand.parse(text, habits: activeHabits) {
             speech.stop(); speech.silence()
             reminderProposal = command
             reply = "Please confirm this reminder action."
+            speech.say(reply)
             return
         }
         guard sharing, AssistantKeychain.read() != nil else { showSettings = true; return }
@@ -193,12 +236,15 @@ struct VoiceOrbView: View {
         speech.silence()
         error = nil
         thinking = true
+        let generation = UUID()
+        requestGeneration = generation
         let snapshot = activeHabits
         requestTask = Task { @MainActor in
-            defer { thinking = false }
+            defer { if requestGeneration == generation { thinking = false } }
             do {
                 let answer = try await VoiceAssistantService.answer(text, habits: snapshot, model: model, history: history)
                 try Task.checkCancellation()
+                guard requestGeneration == generation, conversationActive else { return }
                 pending = try VoiceAssistantService.prepare(answer.logs, habits: snapshot)
                 reply = answer.reply
                 if !pending.isEmpty { reply += " Tap Save logs to confirm." }
@@ -207,7 +253,11 @@ struct VoiceOrbView: View {
                 speech.transcript = ""
                 speech.say(reply)
             } catch is CancellationError { }
-            catch { self.error = error.localizedDescription }
+            catch {
+                guard requestGeneration == generation else { return }
+                self.error = error.localizedDescription
+                stopSession()
+            }
         }
     }
 
@@ -222,6 +272,9 @@ struct VoiceOrbView: View {
     }
 
     private func stopSession() {
+        conversationActive = false
+        requestGeneration = UUID()
+        thinking = false
         microphoneTask?.cancel()
         requestTask?.cancel()
         speech.stop()
