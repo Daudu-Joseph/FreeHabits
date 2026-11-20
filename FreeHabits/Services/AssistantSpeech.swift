@@ -6,6 +6,7 @@ import AVFoundation
 @MainActor
 final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     static var microphoneInUse = false
+    static var voicePlaybackInUse = false
     @Published var transcript = ""
     @Published var listening = false
     @Published var requesting = false
@@ -119,6 +120,7 @@ final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDele
             utterance.voice = AVSpeechSynthesisVoice(language: Locale.current.identifier)
             utterance.rate = AVSpeechUtteranceDefaultSpeechRate
             speaking = true
+            Self.voicePlaybackInUse = true
             synthesizer.speak(utterance)
         } catch { self.error = "The reply is ready, but spoken playback couldn't start." }
     }
@@ -126,6 +128,7 @@ final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDele
     func silence() {
         synthesizer.stopSpeaking(at: .immediate)
         speaking = false
+        Self.voicePlaybackInUse = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
@@ -138,6 +141,7 @@ final class AssistantSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDele
     private func releasePlayback() {
         guard !synthesizer.isSpeaking else { return }
         speaking = false
+        Self.voicePlaybackInUse = false
         if !listening { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
     }
 }

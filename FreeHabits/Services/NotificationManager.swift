@@ -136,7 +136,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         guard let context = habit.modelContext else { return }
         switch action {
         case "DONE":
-            let record = (habit.completions ?? []).first { Calendar.current.isDate($0.date, inSameDayAs: day) } ?? HabitCompletion(date: day)
+            let record = (habit.completions ?? []).first { Calendar.current.isDate($0.date, inSameDayAs: day) && $0.isLogOnly != true } ?? HabitCompletion(date: day)
             if record.modelContext == nil { context.insert(record); record.habit = habit }
             record.isLogOnly = false
             record.isRelapse = false
@@ -151,6 +151,10 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             UserDefaults.standard.set(true, forKey: stateKey(habit, day, "skip"))
         default: return
         }
+        let delivered = await UNUserNotificationCenter.current().deliveredNotifications()
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: delivered.filter {
+            ($0.request.content.userInfo["habitID"] as? String) == habit.reminderID
+        }.map { $0.request.identifier })
         let all = try context.fetch(FetchDescriptor<Habit>())
         await refresh(habits: all)
         NotificationCenter.default.post(name: .habitReminderChanged, object: nil)
@@ -180,7 +184,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     }
     private func speakReminder(_ title: String) {
         guard UserDefaults.standard.bool(forKey: "reminderSpeakForeground"),
-              !quiet(Date()), !AssistantSpeech.microphoneInUse, !speaker.isSpeaking else { return }
+              !quiet(Date()), !AssistantSpeech.microphoneInUse, !AssistantSpeech.voicePlaybackInUse, !speaker.isSpeaking else { return }
         let utterance = AVSpeechUtterance(string: "Reminder. \(title). You can log it, snooze, or skip today.")
         speaker.speak(utterance)
     }

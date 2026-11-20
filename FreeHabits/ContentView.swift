@@ -176,6 +176,7 @@ struct ContentView: View {
     private var habitGrid: some View {
         ScrollView {
             VStack(spacing: 16) {
+                if isToday { OverdueHabitsCard().padding(.horizontal) }
                 DateStrip(
                     selection: $selectedDate,
                     in: dateBounds,
@@ -233,6 +234,9 @@ struct ContentView: View {
 
     private var habitListView: some View {
         List {
+            if isToday {
+                OverdueHabitsCard().listRowBackground(Color.clear).listRowSeparator(.hidden)
+            }
             Section {
                 DateStrip(
                     selection: $selectedDate,

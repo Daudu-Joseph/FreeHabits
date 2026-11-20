@@ -150,7 +150,7 @@ struct VoiceOrbView: View {
                     }
                     Text("Try “I drank two glasses of water” or “How am I doing this week?”")
                         .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    Text("The microphone runs only while Listening. Tap Send to share your words and habit summary with NVIDIA.")
+                    Text("The microphone runs only while Listening. Exact reminder commands are handled locally after confirmation. Other voice notes share your words and habit summary with NVIDIA when you tap Send.")
                         .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }.padding(24)
             }
