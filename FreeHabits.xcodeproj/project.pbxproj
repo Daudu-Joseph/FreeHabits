@@ -65,6 +65,10 @@
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B10000000000000000000011 /* Exceptions for FreeHabitsWidget synchronized folder */ = {isa = PBXFileSystemSynchronizedBuildFileExceptionSet; membershipExceptions = (Info.plist,); target = B10000000000000000000001 /* FreeHabitsWidget */; };
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A675E7BC2FA0D28700C137B9 /* FreeHabitsWatch Watch App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
@@ -80,7 +84,7 @@
 			path = FreeHabits;
 			sourceTree = "<group>";
 		};
-		B1000000000000000000000E /* FreeHabitsWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; path = FreeHabitsWidget; sourceTree = "<group>"; };
+		B1000000000000000000000E /* FreeHabitsWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (B10000000000000000000011 /* Exceptions for FreeHabitsWidget synchronized folder */,); path = FreeHabitsWidget; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
