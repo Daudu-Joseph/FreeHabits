@@ -69,10 +69,6 @@ struct ContentView: View {
                 ArchivedHabitsView(habits: archivedHabits)
             }
         }
-        .onChange(of: activeHabits.count) {
-            let pending = activeHabits.filter { !$0.isCompletedToday && $0.isDueToday }.count
-            NotificationManager.shared.scheduleEveningNudge(pendingCount: pending)
-        }
         .task {
             await HealthKitManager.shared.syncTodayCompletions(for: activeHabits, context: modelContext)
         }

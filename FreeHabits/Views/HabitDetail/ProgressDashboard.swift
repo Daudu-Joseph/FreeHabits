@@ -2,14 +2,32 @@ import SwiftUI
 import SwiftData
 
 struct FreeHabitsRootView: View {
+    @Query private var allHabits: [Habit]
+    @Query private var allRecords: [HabitCompletion]
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("eveningCheckInEnabled") private var eveningCheckInEnabled = true
+    private var reminderRevision: String {
+        let habits = allHabits.map {
+            "\($0.persistentModelID)|\($0.name)|\($0.reminderTime ?? -1)|\($0.archivedAt?.timeIntervalSince1970 ?? 0)|\($0.frequencyData?.base64EncodedString() ?? "")|\($0.pausedRangesData?.base64EncodedString() ?? "")|\($0.trackingKindRaw ?? "")|\($0.targetAmount ?? 0)|\($0.checklistItemsData?.base64EncodedString() ?? "")"
+        }.joined(separator: ";")
+        let records = allRecords.map {
+            "\($0.persistentModelID)|\($0.date.timeIntervalSince1970)|\($0.amountValue ?? 0)|\($0.isRelapse ?? false)|\($0.isLogOnly ?? false)|\($0.checklistData?.base64EncodedString() ?? "")"
+        }.joined(separator: ";")
+        return habits + records + "\(eveningCheckInEnabled)"
+    }
     var body: some View {
         TabView {
             ContentView().tabItem { Label("Today", systemImage: "checklist") }
             ProgressDashboard().tabItem { Label("Progress", systemImage: "chart.bar.xaxis") }
+            VoiceOrbView().tabItem { Label("Voice", systemImage: "waveform") }
             NavigationStack { HabitDataView() }
                 .tabItem { Label("Data", systemImage: "externaldrive") }
         }
         .tint(.purple)
+        .task(id: reminderRevision) { await NotificationManager.shared.refresh(habits: allHabits) }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await NotificationManager.shared.refresh(habits: allHabits) } }
+        }
     }
 }
 
