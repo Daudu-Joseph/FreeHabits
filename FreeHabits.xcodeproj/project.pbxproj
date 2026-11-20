@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		A675E7C52FA0D28800C137B9 /* FreeHabitsWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A675E7BB2FA0D28700C137B9 /* FreeHabitsWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B1000000000000000000000F /* TaskRow.swift in Widget Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* TaskRow.swift */; };
 		B1000000000000000000000A /* FreeHabitsTodayWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* FreeHabitsTodayWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -40,6 +41,7 @@
 /* Begin PBXFileReference section */
 		A675E7BB2FA0D28700C137B9 /* FreeHabitsWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "FreeHabitsWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A69B5E0A2F925110003DBC44 /* FreeHabits.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FreeHabits.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000000000000000000010 /* TaskRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FreeHabits/Components/SwiftPieces/TaskRow.swift; sourceTree = SOURCE_ROOT; };
 		B10000000000000000000003 /* FreeHabitsTodayWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FreeHabitsTodayWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -113,6 +115,7 @@
 		A69B5E0B2F925110003DBC44 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				B10000000000000000000010 /* TaskRow.swift */,
 				A69B5E0A2F925110003DBC44 /* FreeHabits.app */,
 				A675E7BB2FA0D28700C137B9 /* FreeHabitsWatch Watch App.app */,
 				B10000000000000000000003 /* FreeHabitsTodayWidget.appex */,
@@ -248,7 +251,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B10000000000000000000006 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		B10000000000000000000006 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B1000000000000000000000F /* TaskRow.swift in Widget Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
