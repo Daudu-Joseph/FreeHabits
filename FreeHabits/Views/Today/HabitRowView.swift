@@ -14,6 +14,7 @@ struct HabitRowView: View {
     var date: Date = Calendar.current.startOfDay(for: .now)
 
     @State private var burstTrigger = false
+    @State private var showingLog = false
 
     private var isCompleted: Bool {
         habit.isCompleted(on: date)
@@ -31,16 +32,20 @@ struct HabitRowView: View {
                     Image(systemName: "flame.fill")
                         .font(.caption2)
                         .foregroundStyle(.orange)
-                    Text(habit.currentStreak == 1 ? "1 day streak" : "\(habit.currentStreak) day streak")
+                    Text("\(habit.currentStreak) \(habit.streakUnit) streak")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+                if let category = habit.category, !category.isEmpty {
+                    Text(category).font(.caption2).foregroundStyle(.secondary)
                 }
             }
 
             Spacer(minLength: 8)
 
             Button {
-                toggleCompletion()
+                if habit.trackingKind != .yesNo { showingLog = true }
+                else { toggleCompletion() }
             } label: {
                 Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 28, weight: .light))
@@ -56,6 +61,7 @@ struct HabitRowView: View {
         .padding(.vertical, 4)
         // Success haptic when completing, light when un-completing
         .sensoryFeedback(.success, trigger: burstTrigger)
+        .sheet(isPresented: $showingLog) { HabitTrackingSheet(habit: habit, date: date) }
     }
 
     private var habitIcon: some View {
@@ -74,7 +80,7 @@ struct HabitRowView: View {
             let cal = Calendar.current
             if isCompleted {
                 (habit.completions ?? [])
-                    .filter { cal.isDate($0.date, inSameDayAs: date) }
+                    .filter { cal.isDate($0.date, inSameDayAs: date) && $0.isLogOnly != true }
                     .forEach { modelContext.delete($0) }
                 if cal.isDateInToday(date) {
                     NotificationManager.shared.scheduleReminder(for: habit)

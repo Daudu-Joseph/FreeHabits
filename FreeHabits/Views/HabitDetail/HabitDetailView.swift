@@ -12,6 +12,9 @@ struct HabitDetailView: View {
     @Bindable var habit: Habit
     @Environment(\.modelContext) private var modelContext
     @State private var showingEdit = false
+    @State private var showingDayLog = false
+    @State private var selectedLogDate = Calendar.current.startOfDay(for: .now)
+    @State private var showingFocusTimer = false
 
     private let calendar = Calendar.current
 
@@ -42,11 +45,26 @@ struct HabitDetailView: View {
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Edit") { showingEdit = true }
+                HStack {
+                    Button { showingFocusTimer = true } label: {
+                        Image(systemName: "timer").accessibilityLabel("Start focus timer")
+                    }
+                    Button {
+                        selectedLogDate = Calendar.current.startOfDay(for: .now)
+                        showingDayLog = true
+                    } label: { Image(systemName: "square.and.pencil").accessibilityLabel("Add today note") }
+                    Button("Edit") { showingEdit = true }
+                }
             }
         }
         .sheet(isPresented: $showingEdit) {
             AddHabitView(editingHabit: habit)
+        }
+        .sheet(isPresented: $showingDayLog) {
+            HabitTrackingSheet(habit: habit, date: selectedLogDate, noteOnly: true)
+        }
+        .sheet(isPresented: $showingFocusTimer) {
+            FocusTimerView(habitName: habit.name)
         }
     }
 
@@ -90,12 +108,17 @@ struct HabitDetailView: View {
                     Text(habit.frequency.displayName)
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.white.opacity(0.75))
+                    if let category = habit.category, !category.isEmpty {
+                        Text(category.uppercased())
+                            .font(.caption2.weight(.bold)).tracking(1)
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
                 }
 
                 // Badges
                 HStack(spacing: 10) {
                     if habit.currentStreak > 0 {
-                        Label("\(habit.currentStreak) day streak", systemImage: "flame.fill")
+                        Label("\(habit.currentStreak) \(habit.streakUnit) streak", systemImage: "flame.fill")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 12)
@@ -133,14 +156,14 @@ struct HabitDetailView: View {
             StatCard(
                 title: "Streak",
                 value: "\(habit.currentStreak)",
-                unit: habit.currentStreak == 1 ? "day" : "days",
+                unit: habit.streakUnit,
                 icon: "flame.fill",
                 color: .orange
             )
             StatCard(
                 title: "Best",
                 value: "\(habit.bestStreak)",
-                unit: habit.bestStreak == 1 ? "day" : "days",
+                unit: habit.streakUnit,
                 icon: "trophy.fill",
                 color: .yellow
             )
@@ -160,7 +183,7 @@ struct HabitDetailView: View {
         let rate = habit.completionRate30Days
         let pct = Int(rate * 100)
         let color = rateColor(rate)
-        let completedDays = Int(rate * 30)
+        let completedDays = habit.recentMetrics.completed
 
         return HStack(spacing: 20) {
             // Donut ring with % inside
@@ -190,7 +213,7 @@ struct HabitDetailView: View {
                 Text(rateLabel(rate))
                     .font(.title3.bold())
                     .foregroundStyle(color)
-                Text("\(completedDays) of 30 days completed")
+                Text("\(completedDays) of \(habit.recentMetrics.expected) scheduled completions")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -226,7 +249,7 @@ struct HabitDetailView: View {
             HStack(spacing: 0) {
                 ForEach(last7Days, id: \.self) { day in
                     let completed = (habit.completions ?? []).contains {
-                        calendar.isDate($0.date, inSameDayAs: day)
+                        $0.isRelapse != true && calendar.isDate($0.date, inSameDayAs: day) && habit.isCompleted(on: day)
                     }
                     let isToday = calendar.isDateInToday(day)
 
@@ -257,6 +280,11 @@ struct HabitDetailView: View {
                         Text(day, format: .dateTime.day())
                             .font(.caption2.weight(isToday ? .bold : .regular))
                             .foregroundStyle(isToday ? habit.habitColor : .secondary)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        selectedLogDate = day
+                        showingDayLog = true
                     }
                     .frame(maxWidth: .infinity)
                 }

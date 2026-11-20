@@ -7,6 +7,11 @@
 
 import Foundation
 
+struct HabitPauseRange: Codable, Hashable {
+    var start: Date
+    var end: Date
+}
+
 /// Describes how often a habit should be performed.
 enum HabitFrequency: Codable, Hashable {
     /// Every day.
@@ -69,12 +74,12 @@ enum HabitFrequency: Codable, Hashable {
     }
 
     /// Returns true if the habit is due on the given date according to this frequency.
-    func isDue(on date: Date) -> Bool {
+    func isDue(on date: Date, calendar: Calendar = .current) -> Bool {
         switch self {
         case .daily:
             return true
         case .weekdays(let days):
-            let weekday = Calendar.current.component(.weekday, from: date)
+            let weekday = calendar.component(.weekday, from: date)
             return days.contains(weekday)
         case .timesPerWeek:
             // Always "due" — the count is evaluated at the week level
@@ -87,7 +92,7 @@ enum HabitFrequency: Codable, Hashable {
         guard case .timesPerWeek(let target) = self else { return false }
         let cal = Calendar.current
         guard let weekInterval = cal.dateInterval(of: .weekOfYear, for: date) else { return false }
-        let count = completions.filter { weekInterval.contains($0) }.count
+        let count = Set(completions.filter { weekInterval.contains($0) }.map { cal.startOfDay(for: $0) }).count
         return count >= target
     }
 }
@@ -95,5 +100,79 @@ enum HabitFrequency: Codable, Hashable {
 private extension Array {
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
+    }
+}
+
+
+/// Pure calendar calculations shared by the app and its validation harness.
+struct HabitMetrics {
+    struct Period {
+        let done: Int
+        let target: Int
+        let isOpen: Bool
+    }
+    let periods: [Period]
+    let weekly: Bool
+
+    init(frequency: HabitFrequency, createdAt: Date, archivedAt: Date?, completions: [Date], now: Date = .now, calendar: Calendar = .current, since: Date? = nil, pausedRanges: [HabitPauseRange] = []) {
+        let today = calendar.startOfDay(for: now)
+        let first = calendar.startOfDay(for: max(createdAt, since ?? createdAt))
+        let last = min(today, calendar.startOfDay(for: archivedAt ?? now))
+        let days = Set(completions.map { calendar.startOfDay(for: $0) }.filter { $0 >= first && $0 <= last })
+        var result: [Period] = []
+        if case .timesPerWeek(let target) = frequency {
+            weekly = true
+            var cursor = first
+            while cursor <= last, let interval = calendar.dateInterval(of: .weekOfYear, for: cursor) {
+                let count = days.filter { interval.contains($0) }.count
+                let targetPerWeek = max(1, target)
+                let pausedDays = (0..<7).compactMap { offset in
+                    calendar.date(byAdding: .day, value: offset, to: interval.start)
+                }.filter { day in
+                    pausedRanges.contains { day >= calendar.startOfDay(for: $0.start) && day <= calendar.startOfDay(for: $0.end) }
+                }.count
+                let adjustedTarget = max(0, targetPerWeek - pausedDays)
+                if adjustedTarget > 0 {
+                    result.append(Period(done: min(count, adjustedTarget), target: adjustedTarget, isOpen: archivedAt == nil && interval.contains(now)))
+                }
+                cursor = interval.end
+            }
+        } else {
+            weekly = false
+            var cursor = first
+            while cursor <= last {
+                let paused = pausedRanges.contains {
+                    cursor >= calendar.startOfDay(for: $0.start) && cursor <= calendar.startOfDay(for: $0.end)
+                }
+                if frequency.isDue(on: cursor, calendar: calendar) && !paused {
+                    result.append(Period(done: days.contains(cursor) ? 1 : 0, target: 1, isOpen: archivedAt == nil && cursor == today))
+                }
+                guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+                cursor = next
+            }
+        }
+        periods = result
+    }
+
+    var completed: Int { periods.reduce(0) { $0 + $1.done } }
+    var expected: Int { periods.reduce(0) { $0 + $1.target } }
+    var rate: Double { expected == 0 ? 0 : Double(completed) / Double(expected) }
+    var current: Int {
+        var count = 0
+        for period in periods.reversed() {
+            if period.done >= period.target { count += 1 }
+            else if period.isOpen { continue }
+            else { break }
+        }
+        return count
+    }
+    var best: Int {
+        var run = 0
+        var best = 0
+        for period in periods {
+            run = period.done >= period.target ? run + 1 : 0
+            best = max(best, run)
+        }
+        return best
     }
 }

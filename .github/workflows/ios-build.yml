@@ -1,4 +1,4 @@
-name: iOS build
+name: Free personal iOS build
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build-ios:
-    name: Build FreeHabits with Xcode
+    name: Build local-only FreeHabits IPA
     runs-on: macos-26
     timeout-minutes: 45
 
@@ -25,7 +25,7 @@ jobs:
           xcodebuild -version
           xcodebuild -list -project FreeHabits.xcodeproj
 
-      - name: Archive for iOS (unsigned)
+      - name: Archive local-only iOS app (unsigned)
         run: |
           xcodebuild archive \
             -project FreeHabits.xcodeproj \
@@ -33,12 +33,29 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/FreeHabits.xcarchive" \
+            SWIFT_ACTIVE_COMPILATION_CONDITIONS=FREE_PERSONAL_INSTALL \
+            CODE_SIGN_ENTITLEMENTS=FreeHabits/WidgetApp.entitlements \
+            DEVELOPMENT_TEAM= \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Upload unsigned Xcode archive
+      - name: Package unsigned IPA for AltServer signing
+        run: |
+          APP_PATH="$RUNNER_TEMP/FreeHabits.xcarchive/Products/Applications/FreeHabits.app"
+          test -d "$APP_PATH"
+          mkdir -p "$RUNNER_TEMP/freehabits-ipa/Payload"
+          ditto "$APP_PATH" "$RUNNER_TEMP/freehabits-ipa/Payload/FreeHabits.app"
+          # AltStore Classic does not fully provision/sign embedded Watch apps.
+          # Package only the iPhone app for this personal sideload build.
+          rm -rf "$RUNNER_TEMP/freehabits-ipa/Payload/FreeHabits.app/Watch"
+          codesign --force --sign - --timestamp=none "$RUNNER_TEMP/freehabits-ipa/Payload/FreeHabits.app/PlugIns/FreeHabitsTodayWidget.appex"
+          codesign --force --sign - --timestamp=none "$RUNNER_TEMP/freehabits-ipa/Payload/FreeHabits.app"
+          
+          (cd "$RUNNER_TEMP/freehabits-ipa" && zip -qry "$RUNNER_TEMP/FreeHabits-personal-unsigned.ipa" Payload)
+
+      - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: FreeHabits-unsigned-xcarchive
-          path: ${{ runner.temp }}/FreeHabits.xcarchive
+          name: FreeHabits-personal-unsigned-IPA
+          path: ${{ runner.temp }}/FreeHabits-personal-unsigned.ipa
           if-no-files-found: error
           retention-days: 7

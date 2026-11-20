@@ -23,6 +23,15 @@ struct AddHabitView: View {
     @State private var reminderDate = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: .now) ?? .now
     @State private var healthLinkEnabled = false
     @State private var selectedHealthLink: String? = nil
+    @State private var trackingKind: Habit.TrackingKind = .yesNo
+    @State private var targetAmountText = "8"
+    @State private var amountUnit = "glasses"
+    @State private var category = ""
+    @State private var checklistItems: [String] = []
+    @State private var checklistDraft = ""
+    @State private var pauseEnabled = false
+    @State private var pauseStart = Calendar.current.startOfDay(for: .now)
+    @State private var pauseEnd = Calendar.current.date(byAdding: .day, value: 6, to: .now) ?? .now
     @FocusState private var isNameFocused: Bool
 
     private let icons: [String] = [
@@ -34,6 +43,18 @@ struct AddHabitView: View {
         "music.note", "paintbrush.fill", "camera.fill", "guitars.fill", "mic.fill", "theatermasks.fill",
         "flame.fill", "bolt.fill", "star.fill", "trophy.fill", "hands.sparkles.fill", "checkmark.seal.fill"
     ]
+
+    private var pauseRangeSelection: Binding<ClosedRange<Date>?> {
+        Binding(
+            get: { pauseEnabled ? pauseStart...max(pauseStart, pauseEnd) : nil },
+            set: { range in
+                guard let range else { return }
+                pauseStart = Calendar.current.startOfDay(for: range.lowerBound)
+                pauseEnd = Calendar.current.startOfDay(for: range.upperBound)
+                pauseEnabled = true
+            }
+        )
+    }
 
     private let colors: [(name: String, color: Color)] = [
         ("red", .red), ("orange", .orange), ("yellow", .yellow),
@@ -53,10 +74,13 @@ struct AddHabitView: View {
                 VStack(spacing: 20) {
                     livePreview
                     nameCard
+                    trackingCard
+                    categoryCard
                     styleCard
                     frequencyCard
+                    pauseCard
                     reminderCard
-                    if HealthKitManager.isAvailable {
+                    if HealthKitManager.isAvailable && trackingKind == .yesNo {
                         healthLinkCard
                     }
                     addButton
@@ -79,6 +103,13 @@ struct AddHabitView: View {
                     selectedIcon = h.icon
                     selectedColor = h.colorName
                     selectedFrequency = h.frequency
+                    trackingKind = h.trackingKind
+                    targetAmountText = h.targetAmount.map { String(Int($0)) } ?? "8"
+                    amountUnit = h.amountUnit ?? "glasses"
+                    category = h.category ?? ""
+                    checklistItems = h.checklistItems
+                    pauseEnabled = !h.pausedRanges.isEmpty
+                    if let pause = h.pausedRanges.first { pauseStart = pause.start; pauseEnd = pause.end }
                     if let hkId = h.healthKitIdentifier {
                         healthLinkEnabled = true
                         selectedHealthLink = hkId
@@ -92,6 +123,76 @@ struct AddHabitView: View {
                 }
             }
         }
+    }
+
+    private var trackingCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Tracking", systemImage: "slider.horizontal.3")
+                .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Picker("Tracking type", selection: $trackingKind) {
+                ForEach(Habit.TrackingKind.allCases) { kind in Text(kind.title).tag(kind) }
+            }
+            .pickerStyle(.segmented)
+            if trackingKind == .amount {
+                HStack {
+                    TextField("Target", text: $targetAmountText).keyboardType(.decimalPad)
+                        .textFieldStyle(.roundedBorder).frame(width: 90)
+                    TextField("Unit (glasses, pages…)", text: $amountUnit).textFieldStyle(.roundedBorder)
+                }
+            } else if trackingKind == .checklist {
+                ForEach(Array(checklistItems.enumerated()), id: \.offset) { index, item in
+                    HStack { Text(item); Spacer(); Button(role: .destructive) { checklistItems.remove(at: index) } label: { Image(systemName: "minus.circle") } }
+                }
+                HStack {
+                    TextField("Add a step", text: $checklistDraft).textFieldStyle(.roundedBorder)
+                    Button("Add") {
+                        let item = checklistDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !item.isEmpty { checklistItems.append(item); checklistDraft = "" }
+                    }.disabled(checklistDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            } else if trackingKind == .avoidance {
+                Text("Log a clean day or record a relapse. Relapses stay in your history and reset the current streak.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var categoryCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Category", systemImage: "tag")
+                .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            TextField("Fitness, health, learning…", text: $category)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private var pauseCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: $pauseEnabled) {
+                Label("Pause this habit", systemImage: "pause.circle")
+                    .font(.subheadline.weight(.medium))
+            }
+            if pauseEnabled {
+                DateRangePicker(
+                    selection: pauseRangeSelection,
+                    style: DateRangePicker.Style(
+                        band: .purple.opacity(0.14),
+                        endpoint: .purple,
+                        today: .purple,
+                        control: .purple.opacity(0.18)
+                    )
+                )
+                .frame(minHeight: 360)
+                Text("Scheduled days in this range are excluded from your streak and completion rate.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     // MARK: - Live Preview
@@ -472,12 +573,31 @@ struct AddHabitView: View {
             habit.frequency = selectedFrequency
             habit.reminderTime = reminderTimeValue
             habit.healthKitIdentifier = hkId
+            habit.trackingKind = trackingKind
+            habit.targetAmount = trackingKind == .amount ? max(0.1, Double(targetAmountText) ?? 1) : nil
+            habit.amountUnit = trackingKind == .amount ? amountUnit : nil
+            habit.category = category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : category.trimmingCharacters(in: .whitespacesAndNewlines)
+            habit.checklistItems = trackingKind == .checklist ? checklistItems : []
+            if pauseEnabled {
+                var ranges = habit.pausedRanges
+                let range = HabitPauseRange(start: pauseStart, end: max(pauseStart, pauseEnd))
+                if ranges.isEmpty { ranges.append(range) } else { ranges[0] = range }
+                habit.pausedRanges = ranges
+            } else {
+                habit.pausedRanges = []
+            }
             NotificationManager.shared.scheduleReminder(for: habit)
         } else {
             let habit = Habit(name: trimmed, icon: selectedIcon, colorName: selectedColor)
             habit.frequency = selectedFrequency
             habit.reminderTime = reminderTimeValue
             habit.healthKitIdentifier = hkId
+            habit.trackingKind = trackingKind
+            habit.targetAmount = trackingKind == .amount ? max(0.1, Double(targetAmountText) ?? 1) : nil
+            habit.amountUnit = trackingKind == .amount ? amountUnit : nil
+            habit.category = category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : category.trimmingCharacters(in: .whitespacesAndNewlines)
+            habit.checklistItems = trackingKind == .checklist ? checklistItems : []
+            if pauseEnabled { habit.pausedRanges = [HabitPauseRange(start: pauseStart, end: max(pauseStart, pauseEnd))] }
             modelContext.insert(habit)
             NotificationManager.shared.scheduleReminder(for: habit)
         }

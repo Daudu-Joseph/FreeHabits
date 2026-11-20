@@ -11,9 +11,13 @@ struct FreeHabitsWatchApp: App {
 
     /// Uses the same CloudKit private container as the iOS app so data syncs automatically.
     var sharedModelContainer: ModelContainer = {
+#if FREE_PERSONAL_INSTALL
+        let config = ModelConfiguration(cloudKitDatabase: .none)
+#else
         let config = ModelConfiguration(
             cloudKitDatabase: .private("iCloud.de.jonasgunklach.FreeHabits")
         )
+#endif
         do {
             return try ModelContainer(for: Habit.self, HabitCompletion.self, configurations: config)
         } catch {

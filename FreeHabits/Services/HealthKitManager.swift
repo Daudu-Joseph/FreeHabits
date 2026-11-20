@@ -16,7 +16,13 @@ final class HealthKitManager {
     private let store = HKHealthStore()
 
     /// Whether HealthKit is available on this device (false on iPad without health data).
-    static var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
+    static var isAvailable: Bool {
+#if FREE_PERSONAL_INSTALL
+        false
+#else
+        HKHealthStore.isHealthDataAvailable()
+#endif
+    }
 
     // MARK: - Link options
 

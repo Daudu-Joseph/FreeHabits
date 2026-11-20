@@ -26,6 +26,15 @@ final class Habit {
     /// HealthKit data type identifier for auto-tracking (e.g. "workout.running", "mindfulSession").
     /// nil means the habit is tracked manually only.
     var healthKitIdentifier: String?
+    /// Optional additive fields keep older SwiftData records readable.
+    var trackingKindRaw: String?
+    var targetAmount: Double?
+    var amountUnit: String?
+    var category: String?
+    var checklistItemsData: Data?
+    var pausedRangesData: Data?
+    /// Stable local reminder identity, assigned when notification scheduling first runs.
+    var reminderID: String?
 
     @Relationship(deleteRule: .cascade, inverse: \HabitCompletion.habit)
     var completions: [HabitCompletion]?
@@ -54,86 +63,82 @@ final class Habit {
 
     var isArchived: Bool { archivedAt != nil }
 
+    enum TrackingKind: String, Codable, CaseIterable, Identifiable {
+        case yesNo, amount, checklist, avoidance
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .yesNo: return "Simple"
+            case .amount: return "Amount goal"
+            case .checklist: return "Checklist"
+            case .avoidance: return "Avoidance"
+            }
+        }
+    }
+
+    var trackingKind: TrackingKind {
+        get { TrackingKind(rawValue: trackingKindRaw ?? "") ?? .yesNo }
+        set { trackingKindRaw = newValue.rawValue }
+    }
+
+    var checklistItems: [String] {
+        get { (try? JSONDecoder().decode([String].self, from: checklistItemsData ?? Data())) ?? [] }
+        set { checklistItemsData = try? JSONEncoder().encode(newValue) }
+    }
+
+    var pausedRanges: [HabitPauseRange] {
+        get { (try? JSONDecoder().decode([HabitPauseRange].self, from: pausedRangesData ?? Data())) ?? [] }
+        set { pausedRangesData = try? JSONEncoder().encode(newValue) }
+    }
+
+    func isPaused(on date: Date, calendar: Calendar = .current) -> Bool {
+        let day = calendar.startOfDay(for: date)
+        return pausedRanges.contains {
+            day >= calendar.startOfDay(for: $0.start) && day <= calendar.startOfDay(for: $0.end)
+        }
+    }
+
     var isCompletedToday: Bool {
         isCompleted(on: .now)
     }
 
     func isCompleted(on date: Date) -> Bool {
         let cal = Calendar.current
-        return (completions ?? []).contains { cal.isDate($0.date, inSameDayAs: date) }
+        let records = (completions ?? []).filter {
+            cal.isDate($0.date, inSameDayAs: date) && $0.isRelapse != true && $0.isLogOnly != true
+        }
+        guard let record = records.first else { return false }
+        if trackingKind == .amount, let targetAmount { return (record.amountValue ?? 0) >= targetAmount }
+        if trackingKind == .checklist, !checklistItems.isEmpty {
+            let done = record.checkedChecklistItems
+            return checklistItems.allSatisfy { done.contains($0) }
+        }
+        return true
     }
 
     var isDueToday: Bool {
-        frequency.isDue(on: .now)
+        frequency.isDue(on: .now) && !isPaused(on: .now)
     }
 
-    /// Completion rate over the last 30 days (only counting days the habit was due).
-    var completionRate30Days: Double {
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: .now)
-        let completedDays = Set((completions ?? []).map { cal.startOfDay(for: $0.date) })
-        var due = 0
-        var done = 0
-        for i in 0..<30 {
-            guard let day = cal.date(byAdding: .day, value: -i, to: today) else { continue }
-            if frequency.isDue(on: day) {
-                due += 1
-                if completedDays.contains(day) { done += 1 }
-            }
-        }
-        return due == 0 ? 0 : Double(done) / Double(due)
+    var metrics: HabitMetrics {
+        HabitMetrics(frequency: frequency, createdAt: createdAt, archivedAt: archivedAt,
+                     completions: (completions ?? []).filter { $0.isRelapse != true && isCompleted(on: $0.date) }.map(\.date),
+                     pausedRanges: pausedRanges)
     }
 
-    var currentStreak: Int {
-        let cal = Calendar.current
-        let days = Set((completions ?? []).map { cal.startOfDay(for: $0.date) }).sorted(by: >)
-        guard !days.isEmpty else { return 0 }
-
-        let today = cal.startOfDay(for: .now)
-        let yesterday = cal.date(byAdding: .day, value: -1, to: today)!
-
-        var checkDate: Date
-        if days.contains(today) {
-            checkDate = today
-        } else if days.contains(yesterday) {
-            checkDate = yesterday
-        } else {
-            return 0
-        }
-
-        var streak = 0
-        for day in days {
-            if day == checkDate {
-                streak += 1
-                checkDate = cal.date(byAdding: .day, value: -1, to: checkDate)!
-            } else if day < checkDate {
-                break
-            }
-        }
-        return streak
+    var recentMetrics: HabitMetrics {
+        let since = Calendar.current.date(byAdding: .day, value: -29, to: Calendar.current.startOfDay(for: .now))!
+        return HabitMetrics(frequency: frequency, createdAt: createdAt, archivedAt: archivedAt,
+                            completions: (completions ?? []).filter { $0.isRelapse != true && isCompleted(on: $0.date) }.map(\.date), since: since,
+                            pausedRanges: pausedRanges)
     }
-
-    var bestStreak: Int {
-        let cal = Calendar.current
-        let days = Set((completions ?? []).map { cal.startOfDay(for: $0.date) }).sorted()
-        guard days.count > 0 else { return 0 }
-
-        var best = 1
-        var current = 1
-        for i in 1..<days.count {
-            if let expected = cal.date(byAdding: .day, value: 1, to: days[i - 1]),
-               expected == days[i] {
-                current += 1
-                best = max(best, current)
-            } else {
-                current = 1
-            }
-        }
-        return best
-    }
+    var completionRate30Days: Double { recentMetrics.rate }
+    var currentStreak: Int { metrics.current }
+    var bestStreak: Int { metrics.best }
+    var streakUnit: String { metrics.weekly ? "weeks" : "days" }
 
     var totalCompletions: Int {
-        Set((completions ?? []).map { Calendar.current.startOfDay(for: $0.date) }).count
+        Set((completions ?? []).filter { isCompleted(on: $0.date) }.map { Calendar.current.startOfDay(for: $0.date) }).count
     }
 
     var habitColor: Color {
