@@ -1,20 +1,8 @@
-# SwiftPieces components
+# SwiftPieces component use
 
-Retrieved 2026-11-19 from the official SwiftPieces registry. The component source files are unmodified and each includes its copyright and license header. The shared `LICENSE.txt` contains the MIT + Commons Clause license text.
-
-| Component | Registry source | Version | Free component page | Use in FreeHabits |
-| --- | --- | --- | --- | --- |
-| SelectMenu | [registry/swift/controls/SelectMenu.swift](https://github.com/Saivion/SwiftPieces/blob/main/registry/swift/controls/SelectMenu.swift) | 1.0.0 | [Select Menu](https://swiftpieces.com/docs/components/controls/select-menu) | Choose a verified NVIDIA model and filter model-check results in Voice settings. |
-| CommitButton | [registry/swift/controls/CommitButton.swift](https://github.com/Saivion/SwiftPieces/blob/main/registry/swift/controls/CommitButton.swift) | 2.3.1 | [Commit Button](https://swiftpieces.com/docs/components/controls/commit-button) | Connection/discovery and model-selection actions, including loading, success and error states. |
-| AssistantOrb | [registry/swift/ai/AssistantOrb.swift](https://github.com/Saivion/SwiftPieces/blob/main/registry/swift/ai/AssistantOrb.swift) and matching `AssistantOrb.metal` | 1.2.0 | [Assistant Orb](https://swiftpieces.com/docs/components/ai/assistant-orb) | Native voice screen, with wrapper status text and palette changes. The source orb itself remains a fixed thinking animation, not an audio waveform visualizer. Retrieved 2026-11-20. |
-| ActivityHeatmap | [registry/swift/data/ActivityHeatmap.swift](https://github.com/Saivion/SwiftPieces/blob/main/registry/swift/data/ActivityHeatmap.swift) | 1.3.0 | [Activity Heatmap](https://swiftpieces.com/docs/components/data/activity-heatmap) | Year activity calendar; its calendar-day streak summary is disabled because FreeHabits calculates schedule-aware streaks. |
-| DateStrip | [registry/swift/inputs/DateStrip.swift](https://github.com/Saivion/SwiftPieces/blob/main/registry/swift/inputs/DateStrip.swift) | 1.0.0 | [Date Strip](https://swiftpieces.com/docs/components/inputs/date-strip) | Select a past day from Today in either list or grid layout. |
-| DateRangePicker | [registry/swift/inputs/DateRangePicker.swift](https://github.com/Saivion/SwiftPieces/blob/main/registry/swift/inputs/DateRangePicker.swift) | 1.2.0 | [Date Range Picker](https://swiftpieces.com/docs/components/inputs/date-range-picker) | Choose a date span while pausing a habit. |
-| RingBreakdown | [registry/swift/data/RingBreakdown.swift](https://github.com/Saivion/SwiftPieces/blob/main/registry/swift/data/RingBreakdown.swift) | 2.2.0 | [Ring Breakdown](https://swiftpieces.com/docs/components/data/ring-breakdown) | Compare completion totals across habits. |
-| ScrubChart | [registry/swift/data/ScrubChart.swift](https://github.com/Saivion/SwiftPieces/blob/main/registry/swift/data/ScrubChart.swift) | 2.2.1 | [Scrub Chart](https://swiftpieces.com/docs/components/data/scrub-chart) | Inspect monthly and daily completion history with scrubbing and range selection. |
-| TimerDial | [registry/swift/controls/TimerDial.swift](https://github.com/Saivion/SwiftPieces/blob/main/registry/swift/controls/TimerDial.swift) | 2.2.0 | [Timer Dial](https://swiftpieces.com/docs/components/controls/timer-dial) | Set, start, pause and reset the focus countdown. |
-
-The other dashboard cards and tracking controls remain custom SwiftUI and Apple Charts. They follow the supplied Streak screenshots; no Streak source or paid SwiftPieces component code was copied.
-# Thought Orb addition
-
-ThoughtOrb.swift and ThoughtOrb.metal: SwiftPieces Thought Orb 1.2.0, retrieved from https://swiftpieces.com/api/registry/ThoughtOrb on 2026-11-20. Original source and copyright retained. Used for the voice surface and morphing status pill; its animation is decorative, not an audio amplitude measurement.
+- Component: `TaskRow`
+- Source version: SwiftPieces v2.2.0 registry component
+- Source page: https://swiftpieces.com/docs/components/lists/task-row
+- Used by: `FreeHabitsWidget/FreeHabitsWidget.swift` for the habit row visual in the Home Screen widget.
+- WidgetKit and App Intents provide the extension container, timeline, and Done/Snooze/Skip actions. SwiftPieces does not provide a WidgetKit extension component.
+- `TaskRow.swift` is copied from the published component source with its copyright and license notice. The component is used as a presentational row in the widget; its in-app swipe/drag gestures are not enabled there.

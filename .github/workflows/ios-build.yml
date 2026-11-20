@@ -34,7 +34,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/FreeHabits.xcarchive" \
             SWIFT_ACTIVE_COMPILATION_CONDITIONS=FREE_PERSONAL_INSTALL \
-            CODE_SIGN_ENTITLEMENTS= \
+            CODE_SIGN_ENTITLEMENTS=FreeHabits/WidgetApp.entitlements \
             DEVELOPMENT_TEAM= \
             CODE_SIGNING_ALLOWED=NO
 

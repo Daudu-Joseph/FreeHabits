@@ -29,9 +29,17 @@ struct FreeHabitsRootView: View {
                 .tabItem { Label("Data", systemImage: "externaldrive") }
         }
         .tint(.purple)
-        .task(id: reminderRevision) { await NotificationManager.shared.refresh(habits: allHabits) }
+        .task(id: reminderRevision) {
+            await NotificationManager.shared.refresh(habits: allHabits)
+            await HabitWidgetShared.applyQueuedActions(habits: allHabits)
+        }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await NotificationManager.shared.refresh(habits: allHabits) } }
+            if phase == .active {
+                Task {
+                    await NotificationManager.shared.refresh(habits: allHabits)
+                    await HabitWidgetShared.applyQueuedActions(habits: allHabits)
+                }
+            }
             else { NotificationManager.shared.stopSpeaking() }
         }
     }
