@@ -4,13 +4,15 @@ import AVFoundation
 /// Plays PCM chunks as they arrive; never waits for or stores a complete audio file.
 @MainActor
 final class DeepgramSpeaker {
-    static let defaultVoice = "aura-2-thalia-en"
+    static let defaultVoice = "flux-hannah-en"
     static let voices = [
+        "flux-hannah-en",
         "aura-2-thalia-en", "aura-2-andromeda-en", "aura-2-helena-en",
         "aura-2-apollo-en", "aura-2-arcas-en", "aura-2-aries-en",
         "aura-2-draco-en", "aura-2-pandora-en", "aura-2-luna-en", "aura-2-zeus-en"
     ]
     static func label(_ voice: String) -> String {
+        if voice == "flux-hannah-en" { return "Hannah · American · Flux" }
         let name = voice.replacingOccurrences(of: "aura-2-", with: "").replacingOccurrences(of: "-en", with: "").capitalized
         return name + (["aura-2-draco-en", "aura-2-pandora-en"].contains(voice) ? " · British" : " · American")
     }
@@ -48,7 +50,8 @@ final class DeepgramSpeaker {
         try audioSession.setActive(true)
         try engine.start()
         self.firstAudio = firstAudio
-        var url = URLComponents(string: "wss://api.deepgram.com/v1/speak")!
+        let usesFlux = voice.hasPrefix("flux-")
+        var url = URLComponents(string: usesFlux ? "wss://api.deepgram.com/v2/speak" : "wss://api.deepgram.com/v1/speak")!
         url.queryItems = [.init(name: "model", value: voice), .init(name: "encoding", value: "linear16"),
                           .init(name: "sample_rate", value: "24000")]
         var request = URLRequest(url: url.url!)
@@ -76,7 +79,9 @@ final class DeepgramSpeaker {
                                 if event?["type"] as? String == "Error" {
                                     throw AssistantError.message("Deepgram couldn't generate speech. Check the key, quota and voice access.")
                                 }
-                                if event?["type"] as? String == "Flushed" {
+                                // Flux Flushed only acknowledges the buffer; SpeechMetadata ends its audio.
+                                let eventType = event?["type"] as? String
+                                if eventType == (usesFlux ? "SpeechMetadata" : "Flushed") {
                                     guard self.remainder.isEmpty, self.receivedAudio else {
                                         throw AssistantError.message("Deepgram returned no usable speech audio.")
                                     }
